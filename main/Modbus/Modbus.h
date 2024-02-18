@@ -4,7 +4,8 @@
 extern "C" {
 #endif
 
-int TestFunction();
+void MbInit();
+void MbSendRequest();
 
 #ifdef __cplusplus
 }

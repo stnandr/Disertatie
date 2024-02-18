@@ -4,5 +4,7 @@
 # CMakeLists in this exact order for cmake to work correctly
 cmake_minimum_required(VERSION 3.16)
 
-include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+include($ENV{IDF_PATH}/tools/cmake/project.cmake
+$ENV{IDF_PATH}/libs/esp_modbus/CMakeLists.txt)
+include_directories($ENV{IDF_PATH}/../libs/esp_modbus)
 project(Disertatie)

@@ -1,5 +1,4 @@
 #include "NetworkManager.h"
-
 #include <stdio.h>
 #include <string.h>
 #include <sys/param.h>
@@ -17,12 +16,9 @@
 #include "lwip/sockets.h"
 #include <lwip/netdb.h>
 
-//
-// TODO: Do this in a sane way
-#define PORT 1799
+#define PORT 502
 
 static const char* TAG = "TCP/IP socket";
-
 
 const char* ssid = "Orange-E1C6";
 const char* pass = "QsZRX7EcEdzKt4XcdN";
@@ -34,8 +30,6 @@ struct NetworkManagerData {
     int retry_num;
 };
 
-//
-// TODO: do something about argument names
 void WiFiEventHandler(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
 {
     //
@@ -47,7 +41,7 @@ void WiFiEventHandler(void* event_handler_arg, esp_event_base_t event_base, int3
     else if (event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
         printf("Device LOST connection\n");
-        
+
         if (retryNum < 10)
         {
             esp_wifi_connect();
@@ -59,9 +53,6 @@ void WiFiEventHandler(void* event_handler_arg, esp_event_base_t event_base, int3
     {
         printf("Device got IP...\n\n");
     }
-
-    //
-    // TODO: Return error code / OK
 }
 
 void WiFiConnection()
@@ -80,23 +71,16 @@ void WiFiConnection()
     esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, WiFiEventHandler, NULL);
     esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, WiFiEventHandler, NULL);
     
-    //
-    // TODO: Complete the configuration with all the necessary data
     wifi_config_t wifi_configuration = {
         .sta = {
             .ssid = "",
             .password = "",
-            
         }
     };
 
     strcpy((char*)wifi_configuration.sta.ssid, ssid);
     strcpy((char*)wifi_configuration.sta.password, pass);    
     
-    //
-    // TODO: Check Kconfig and learn more about it
-    //esp_log_write(ESP_LOG_INFO, "Kconfig", "SSID=%s, PASS=%s", ssid, pass);
-
     esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_configuration);
 
     //
@@ -169,8 +153,6 @@ void TcpServerTask(void* pvParameters)
         
         ESP_LOGI(TAG, "Socket listening");
 
-        //
-        // TODO? While in while, can do better?
         while (true)
         {
         	struct sockaddr_in sourceAddr;
@@ -190,8 +172,6 @@ void TcpServerTask(void* pvParameters)
             // Clear buffer
 			bzero(receiveBuffer, sizeof(receiveBuffer));
 
-            //
-            // TODO: Why do we delay? if recv stalls?
         	vTaskDelay(500 / portTICK_PERIOD_MS);
 
 			while(1)
@@ -204,8 +184,6 @@ void TcpServerTask(void* pvParameters)
 				{
 					ESP_LOGI(TAG, "Waiting for data");
 
-                    //
-                    // TODO: Why do we delay if recv stalls?
 					vTaskDelay(100 / portTICK_PERIOD_MS);
                     break;
 				}
@@ -241,5 +219,5 @@ void TcpServerTask(void* pvParameters)
 }
 
 void NetworkManagerRun() {
-    xTaskCreate(TcpServerTask, "tcp_server", 4096, NULL, 5, NULL);
+    //xTaskCreate(TcpServerTask, "tcp_server", 4096, NULL, 5, NULL);
 }

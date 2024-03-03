@@ -10,8 +10,14 @@
 void app_main(void)
 {
     NetworkManagerInit();
-    //NetworkManagerRun();
 
+    while(CONNECTED != 1)
+    {
+    usleep(1000);
+    }
+
+
+    //NetworkManagerRun();
     MbInit();
     MbSendRequest();
 }

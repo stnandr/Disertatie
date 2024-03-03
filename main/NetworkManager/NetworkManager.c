@@ -17,6 +17,7 @@
 #include <lwip/netdb.h>
 
 #define PORT 502
+int CONNECTED = 0;
 
 static const char* TAG = "TCP/IP socket";
 
@@ -52,6 +53,7 @@ void WiFiEventHandler(void* event_handler_arg, esp_event_base_t event_base, int3
     else if (event_id == IP_EVENT_STA_GOT_IP)
     {
         printf("Device got IP...\n\n");
+        CONNECTED = 1;
     }
 }
 

@@ -8,15 +8,17 @@ namespace
 
 void MbInit()
 {
-    client = new MbClient();
+    ::client = new MbClient("192.168.1.101" , 0xFF);
 }
 
 void MbSendRequest()
 {
-    client->SendReceiveRequest();
+    ::client->ProcessResponse();
+    ::client->SendReceiveRequest("OperatingHours");
+   
 }
 
 void MbDestroy()
 {
-    delete client;
+    delete ::client;
 }

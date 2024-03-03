@@ -3,137 +3,118 @@
 // STL
 #include <array>
 #include <string>
+#include <map>
+#include <thread>
 
-// ESP Deps
-#include "protocol_examples_common.h"
-#include <string.h>
-#include <sys/queue.h>
+#include "lwip/netdb.h"
+
 #include "esp_log.h"
-#include "esp_system.h"
-#include "esp_wifi.h"
-#include "esp_event.h"
-#include "esp_log.h"
-#include "nvs_flash.h"
-#include "esp_netif.h"
-#include "esp_netif_types.h"
-#include "esp_netif_ip_addr.h"
-#include "esp_netif_defaults.h"
-#include "esp_netif_net_stack.h"
-#include "esp_wifi_netif.h"
-#include "esp_netif_br_glue.h"
-#include "esp_netif_ppp.h"
-#include "esp_netif_sntp.h"
-#include "esp_mac.h"
-#include "mdns.h"
-#include "protocol_examples_common.h"
-#include "modbus_params.h"      // for modbus parameters structures
-#include "mbcontroller.h"
-#include "sdkconfig.h"
-#include "esp_log.h"   
-#include "esp_modbus_common.h"
-#include "esp_modbus_master.h"
-#include "lwip/err.h"           //light weight ip packets error handling
-#include "lwip/sys.h"           //system applications for light weight ip apps
-#include "lwip/sockets.h"
-#include <lwip/netdb.h>
-#include <lwip/netif.h>
 
-typedef esp_err_t error_t;
-typedef void* VOID_PTR;
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
 
-namespace
-{
-    constexpr int PORT = 502;
-    
-    static const char* TAG = "Modbus socket";
+#define MB_TCP_DEFAULT_PORT 502
+#define TAG "ModbusClient"
 
-    enum eDeviceAddr{
-        DEVICE1 = 0x7E,
-        COUNT
+
+namespace {
+    std::map<std::string, std::array<uint8_t, 4>> requestTable{
+        //
+        // Drop the hardcoded values
+        { "OperatingHours", { 0x4B, 0xFD, 0x00, 0x02 } }
     };
 
-    enum eCID {
-        NUM,
-        VER,
-        DEV,
-        TMP
-    };
+    std::array<uint8_t, 12> ProcessRequest(std::string msgId, uint8_t slaveId, uint16_t transactionId) {
+        uint8_t transactionIdLeft = transactionId >> 8;
+        uint8_t transactionIdRight  = transactionId & 0xFF;
 
-    const char* IP_TABLE[3] = {
-        "192.168.1.101"
-    };
+        std::array<uint8_t, 12> processedReq = { transactionIdLeft, transactionIdRight, 0x00, 0x00, 0x00, 0x06, slaveId, 0x03 };
+        processedReq[8]  = requestTable["OperatingHours"][0];
+        processedReq[9]  = requestTable["OperatingHours"][1];
+        processedReq[10] = requestTable["OperatingHours"][2];
+        processedReq[11] = requestTable["OperatingHours"][3];
 
+        return processedReq;
+    }
 }
 
-MbClient::MbClient()
+MbClient::MbClient(std::string serverAddr, uint8_t slaveAddr)
+    : m_slaveAddr(slaveAddr)
 {
-    VOID_PTR handler = NULL;
-    error_t error = mbc_master_init_tcp(&handler);
-
-    if (handler == NULL || error != ESP_OK)
-        ESP_LOGE(TAG, "Modbus controller initialization fail.");
-
-    mb_parameter_descriptor_t deviceParams[] =
+    // Create socket
+    m_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (m_socket < 0)
     {
-        {
-            eCID::NUM,
-            "Test",
-            "Unit",
-            eDeviceAddr::DEVICE1,
-            MB_PARAM_HOLDING,
-            0x4BFD,
-            2,
-            0,
-            PARAM_TYPE_U16,
-            static_cast<mb_descr_size_t>(4),
-            0,
-            PAR_PERMS_READ_WRITE_TRIGGER
-        }
-    };
+        printf("Failed to create socket\n");
+        vTaskDelete(NULL);
+    }
 
-    uint16_t deviceParamSize = (sizeof(deviceParams) / sizeof(deviceParams[0]));
-    ESP_ERROR_CHECK(mbc_master_set_descriptor(&deviceParams[0], deviceParamSize));
+    // Configure server address
+    m_serverAddr.sin_family = AF_INET;
+    m_serverAddr.sin_port = htons(MB_TCP_DEFAULT_PORT);
+    inet_pton(AF_INET, serverAddr.c_str(), &m_serverAddr.sin_addr);
 
-    esp_netif_t* netif = NULL;
-    netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-
-    mb_communication_info_t communicationInfo = {
-        .ip_mode = MB_MODE_TCP,
-        .ip_port = 502,
-        .ip_addr_type = MB_IPV4,
-        .ip_addr = (void*)IP_TABLE,
-        .ip_netif_ptr = netif
-    };
-
-    ESP_ERROR_CHECK(mbc_master_setup(static_cast<VOID_PTR>(&communicationInfo)));
-
-    error = mbc_master_start();
-
-    if (error != ESP_OK) 
-        ESP_LOGE(TAG, "MB controller start fail, err = %x.", error);
+    // Connect to Modbus TCP server
+    if (connect(m_socket, (struct sockaddr *)&m_serverAddr, sizeof(m_serverAddr)) < 0)
+    {
+        printf("Failed to connect to server\n");
+        close(m_socket);
+        vTaskDelete(NULL);
+    }
 }
 
 MbClient::~MbClient()
 {
-    ESP_ERROR_CHECK(mbc_master_destroy());
 }
 
-void MbClient::SendReceiveRequest()
+void MbClient::SendReceiveRequest(std::string requestId)
 {
-    mb_param_request_t request;
-    request.slave_addr =  eDeviceAddr::DEVICE1;
-    request.command    = 0x03;
-    request.reg_start  = 0x4BFE;
-    request.reg_size   = 0x02;
-    
-    uint32_t data = 0xFFFF;
+    while(true) {
+        usleep(3000000);
 
-    mbc_master_send_request(&request, &data);
-    ESP_LOGI(TAG, "%lu", data);
-    
+        std::array<uint8_t, 12> requestArray = ProcessRequest(requestId, m_slaveAddr, m_transactionCounter);
+
+        if (send(m_socket, requestArray.data(), 12, 0) < 0)
+        {
+            
+        }
+
+        m_transactionCounter++;
+
+
+        //struct sockaddr_in sourceAddr;
+        //uint32_t addrLen = sizeof(sourceAddr);
+        //int clientSocket = accept(m_socket, (struct sockaddr *)&sourceAddr, &addrLen);
+
+        //if (clientSocket < 0)
+        //{
+        //	ESP_LOGE(TAG, "Unable to accept connection: errno %d", errno);
+        //	continue;
+        //}
+
+        //int byteCount = recv(clientSocket, m_receiveBuffer, sizeof(m_receiveBuffer) - 1, 0);
+        //ESP_LOGI(TAG, "ByteCount: %d", byteCount);
+
+        //for (int i = 0; i < 128 && m_receiveBuffer[i] != '\0'; i++)
+        //    ESP_LOGI(TAG, "%X", m_receiveBuffer[i]);
+    }
 }
 
-void MbClient::ProcessRequest()
+void MbClient::ProcessResponse()
 {
-    // Unimplemented
+    //std::thread thread (
+    //    [&] { ListeningTask(); }
+    //);
+
+    //thread.join();
 }
+
+void MbClient::ListeningTask()
+{
+    usleep(1000000);
+
+    int byteCount = recv(m_socket, m_receiveBuffer, sizeof(m_receiveBuffer) - 1, 0);
+    ESP_LOGI(TAG, "%s", m_receiveBuffer);
+}
+

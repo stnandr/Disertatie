@@ -9,7 +9,3 @@ void WiFiEventHandler(void* event_handler_arg, esp_event_base_t event_base, int3
 void WiFiConnection();
 
 void NetworkManagerInit();
-
-static void TcpServerTask(void* pvParameters);
-
-void NetworkManagerRun();

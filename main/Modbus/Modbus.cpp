@@ -13,9 +13,7 @@ void MbInit()
 
 void MbSendRequest()
 {
-    ::client->ProcessResponse();
     ::client->SendReceiveRequest("OperatingHours");
-   
 }
 
 void MbDestroy()

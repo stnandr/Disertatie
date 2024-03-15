@@ -8,17 +8,14 @@ class MbClient
 public:
     MbClient() = delete;
     MbClient(std::string serverAddr, uint8_t slaveAddr);
-    ~MbClient();
+    ~MbClient() = default;
 
     void SendReceiveRequest(std::string requestId);
     void ProcessResponse();
 
 private:
-    void ListeningTask();
-
-private:
     uint8_t m_slaveAddr;
-    uint16_t m_transactionCounter = 0x0001;
+    uint16_t m_transactionCounter = 0x0000;
 
     int m_socket;
 

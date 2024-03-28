@@ -25,13 +25,7 @@ const char* ssid = "Orange-E1C6";
 const char* pass = "QsZRX7EcEdzKt4XcdN";
 int retryNum=0;
 
-struct NetworkManagerData {
-    const char* ssid;
-    const char* pass;
-    int retry_num;
-};
-
-void WiFiEventHandler(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
+void  NetworkManager::WiFiEventHandler(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
 {
     //
     // TODO: Change this to a switch case
@@ -57,7 +51,7 @@ void WiFiEventHandler(void* event_handler_arg, esp_event_base_t event_base, int3
     }
 }
 
-void WiFiConnection()
+void  NetworkManager::WiFiConnection()
 {
     esp_netif_init();
 
@@ -82,8 +76,7 @@ void WiFiConnection()
 
     strcpy((char*)wifi_configuration.sta.ssid, ssid);
     strcpy((char*)wifi_configuration.sta.password, pass);    
-    
-    esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_configuration);
+    esp_wifi_set_config(WIFI_IF_STA, &wifi_configuration);
 
     //
     // Start wifi
@@ -94,7 +87,7 @@ void WiFiConnection()
     printf("wifi_init_softap finished. SSID:%s password:%s",ssid,pass);
 }
 
-void NetworkManagerInit()
+void NetworkManager::Init()
 {
     nvs_flash_init();
     WiFiConnection();

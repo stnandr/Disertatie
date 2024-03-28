@@ -11,7 +11,6 @@
 
 #include "esp_log.h"
 
-#define MB_TCP_DEFAULT_PORT 502
 #define TAG "MbClient"
 
 namespace 
@@ -64,7 +63,7 @@ namespace
     }
 }
 
-MbClient::MbClient(std::string serverAddr, uint8_t slaveAddr)
+MbClient::MbClient(std::string serverAddr, uint8_t slaveAddr, int port)
     : m_slaveAddr(slaveAddr)
 {
     // Create socket
@@ -77,7 +76,7 @@ MbClient::MbClient(std::string serverAddr, uint8_t slaveAddr)
 
     // Configure server address
     m_serverAddr.sin_family = AF_INET;
-    m_serverAddr.sin_port = htons(MB_TCP_DEFAULT_PORT);
+    m_serverAddr.sin_port = htons(port);
     inet_pton(AF_INET, serverAddr.c_str(), &m_serverAddr.sin_addr);
 
     // Connect to Modbus TCP server
@@ -91,62 +90,59 @@ MbClient::MbClient(std::string serverAddr, uint8_t slaveAddr)
 
 void MbClient::SendReceiveRequest(std::string requestId)
 {
-    while(true)
+    //usleep(3000000);
+
+    m_transactionCounter++;
+
+    std::array<uint8_t, 12> requestArray = ProcessRequest(requestId, m_slaveAddr, m_transactionCounter);
+
+    if (send(m_socket, requestArray.data(), 12, 0) < 0)
     {
-        usleep(3000000);
-
-        m_transactionCounter++;
-
-        std::array<uint8_t, 12> requestArray = ProcessRequest(requestId, m_slaveAddr, m_transactionCounter);
-
-        if (send(m_socket, requestArray.data(), 12, 0) < 0)
-        {
-            ESP_LOGW(TAG, "Modbus request frame failed to send");
-            return;
-        }
-        
-        ESP_LOGI(TAG, "Modbus request frame sent successfully");
-
-        int byteCount = recv(m_socket, m_receiveBuffer, sizeof(m_receiveBuffer), 0);
-        ESP_LOGI(TAG, "Response byte count: %d", byteCount);
-        
-        printf("Modbus response RAW frame: ");
-        for (int i = 0; i < byteCount; i++)
-            printf("0x%02X ", m_receiveBuffer[i]);
-        printf("\n");
-
-        ProcessResponse();
+        ESP_LOGW(TAG, "Modbus request frame failed to send");
+        return;
     }
+    
+    ESP_LOGI(TAG, "Modbus request frame sent successfully");
+
+    int byteCount = recv(m_socket, m_receiveBuffer, sizeof(m_receiveBuffer), 0);
+    ESP_LOGI(TAG, "Response byte count: %d", byteCount);
+    
+    printf("Modbus response RAW frame: ");
+    for (int i = 0; i < byteCount; i++)
+        printf("0x%02X ", m_receiveBuffer[i]);
+    printf("\n");
 }
 
-void MbClient::ProcessResponse()
+ByteVector MbClient::ProcessResponse()
 {
     uint16_t transactionCounter = (m_receiveBuffer[0] << 8) + m_receiveBuffer[1];
     
     if(transactionCounter != m_transactionCounter)
     {
         ESP_LOGI(TAG, "INVALID TRANSACTION ID COUNTER %x != ACT:%x", transactionCounter, m_transactionCounter);
-        return;
+        return {};
     }
 
     uint8_t functionCode = m_receiveBuffer[7];
     if(functionCode > 80)
     {
         ESP_LOGW(TAG, "MODBUS ERROR: 0x%02x - %s", functionCode, MbErrorString(m_receiveBuffer[8]));
-        return;
+        return {};
     }
 
     const size_t lenght = m_receiveBuffer[8];
-    std::vector<uint8_t> responseValues;
+    
+    ByteVector responseValues;
     responseValues.resize(lenght);
+    
     for(int i = 9; i < 9 + lenght; i++)
-    responseValues[i-9] = m_receiveBuffer[i];
+        responseValues[i-9] = m_receiveBuffer[i];
 
-    std::string response;
-
+    // TODO: Move this nonsense to a log class -> LOG::INFO(responseValues)
     printf("\u001b[31mResponse:");
     for (uint8_t byte : responseValues)
         printf("\u001b[33m0x%02X\u001b[37m ", byte);
     printf("\n");
 
+    return responseValues;
 }

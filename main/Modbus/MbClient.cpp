@@ -1,7 +1,6 @@
-#include "MbClient.h"
+#include "MbClient.hpp"
 
 // STL
-#include <array>
 #include <map>
 #include <string>
 #include <thread>
@@ -23,24 +22,53 @@ namespace
         SLAVE_DEVICE_FAILURE
     };
 
-    std::map<std::string, std::array<uint8_t, 4>> requestTable
+    const std::map<MbClient::RequestType, std::array<uint8_t, 5>> requestTableCOM
     {
         //
         // Drop the hardcoded values
-        { "OperatingHours", { 0x4B, 0xFD, 0x00, 0x02 } },
-        { "Testing", { 0x4F, 0xFD, 0x00, 0x02 } }
+        { MbClient::RequestType::UP_TIME , { 0xFF, 0x00, 0x97, 0x00, 0x04 } }, // v
+        { MbClient::RequestType::TMP     , { 0xFF, 0x40, 0x05, 0x00, 0x02 } },
+        { MbClient::RequestType::TMP_ETU , { 0x01, 0x3F, 0xFF, 0x00, 0x02 } },
+        { MbClient::RequestType::VTG_L1  , { 0xFF, 0x4F, 0xFD, 0x00, 0x02 } },
+        { MbClient::RequestType::VTG_L2  , { 0xFF, 0x4F, 0xFD, 0x00, 0x02 } },
+        { MbClient::RequestType::VTG_L3  , { 0xFF, 0x4F, 0xFD, 0x00, 0x02 } },
+        { MbClient::RequestType::VTG_AVG , { 0xFF, 0x4F, 0xFD, 0x00, 0x02 } },
+        { MbClient::RequestType::INT_L1  , { 0x01, 0x00, 0x01, 0x00, 0x02 } }, // v
+        { MbClient::RequestType::INT_L2  , { 0x01, 0x00, 0x03, 0x00, 0x02 } }, // v
+        { MbClient::RequestType::INT_L3  , { 0x01, 0x00, 0x05, 0x00, 0x02 } }, // v
+        { MbClient::RequestType::INT_AVG , { 0x01, 0x00, 0x17, 0x00, 0x02 } }, // v
+        { MbClient::RequestType::ORDER_ID, { 0xFF, 0xFA, 0x01, 0x00, 0x1B } }, // v
+        { MbClient::RequestType::SER_NUM , { 0xFF, 0xFA, 0x01, 0x00, 0x1B } }  // v
+
     };
 
-    std::array<uint8_t, 12> ProcessRequest(std::string msgId, uint8_t slaveId, uint16_t transactionId)
+    const std::map<MbClient::RequestType, std::array<uint8_t, 5>> requestTablePOC
     {
-        uint8_t transactionIdLeft = transactionId >> 8;
-        uint8_t transactionIdRight  = transactionId & 0xFF;
+        { MbClient::RequestType::TMP     , { 0x01, 0x0B, 0xFF, 0x00, 0x02 } }, // v
+        { MbClient::RequestType::VTG_L1  , { 0x01, 0x0C, 0x09, 0x00, 0x02 } }, // v
+        { MbClient::RequestType::VTG_L2  , { 0xFF, 0x4F, 0xFD, 0x00, 0x02 } },
+        { MbClient::RequestType::VTG_L3  , { 0xFF, 0x4F, 0xFD, 0x00, 0x02 } },
+        { MbClient::RequestType::VTG_AVG , { 0xFF, 0x4F, 0xFD, 0x00, 0x02 } },
+        { MbClient::RequestType::INT_L1  , { 0x01, 0x0C, 0x03, 0x00, 0x02 } }, // v
+        { MbClient::RequestType::INT_L2  , { 0xFF, 0x4F, 0xFD, 0x00, 0x02 } },
+        { MbClient::RequestType::INT_L3  , { 0xFF, 0x4F, 0xFD, 0x00, 0x02 } },
+        { MbClient::RequestType::INT_AVG , { 0x01, 0x0C, 0x05, 0x00, 0x02 } }, // v
+        { MbClient::RequestType::ORDER_ID, { 0xFF, 0x00, 0x02, 0x00, 0x0A } }, // v
+        { MbClient::RequestType::SER_NUM , { 0xFF, 0x00, 0x0C, 0x00, 0x08 } }  // v
+    };
 
-        std::array<uint8_t, 12> processedReq = { transactionIdLeft, transactionIdRight, 0x00, 0x00, 0x00, 0x06, slaveId, 0x03 };
-        processedReq[8]  = requestTable[msgId][0];
-        processedReq[9]  = requestTable[msgId][1];
-        processedReq[10] = requestTable[msgId][2];
-        processedReq[11] = requestTable[msgId][3];
+    std::array<uint8_t, 12> ProcessRequest(MbClient::RequestType msgId, MbClient::DeviceType devType, uint16_t transactionId)
+    {
+        const auto& requestTable = (MbClient::DeviceType::DT_COM == devType) ? requestTableCOM : requestTablePOC;
+
+        const uint8_t transactionIdLeft   = transactionId >> 8;
+        const uint8_t transactionIdRight  = transactionId & 0xFF;
+
+        std::array<uint8_t, 12> processedReq = { transactionIdLeft, transactionIdRight, 0x00, 0x00, 0x00, 0x06, requestTable.at(msgId)[0], 0x03 };
+        processedReq[8]  = requestTable.at(msgId)[1];
+        processedReq[9]  = requestTable.at(msgId)[2];
+        processedReq[10] = requestTable.at(msgId)[3];
+        processedReq[11] = requestTable.at(msgId)[4];
 
         return processedReq;
     }
@@ -63,8 +91,7 @@ namespace
     }
 }
 
-MbClient::MbClient(std::string serverAddr, uint8_t slaveAddr, int port)
-    : m_slaveAddr(slaveAddr)
+MbClient::MbClient(std::string serverAddr, int port)
 {
     // Create socket
     m_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -88,13 +115,41 @@ MbClient::MbClient(std::string serverAddr, uint8_t slaveAddr, int port)
     }
 }
 
-void MbClient::SendReceiveRequest(std::string requestId)
+void MbClient::SetRequests(std::vector<RequestType> requests)
 {
-    //usleep(3000000);
+    m_requests = requests;
+}
 
+std::vector<MbClient::RequestType> MbClient::GetRequests()
+{
+    return m_requests;
+}
+
+void MbClient::SetDeviceType(DeviceType devType)
+{
+    m_deviceType = devType;
+}
+
+MbClient::DeviceType MbClient::GetDeviceType()
+{
+    return m_deviceType;
+}
+
+void MbClient::SetIdentifier(std::string id)
+{
+    m_identifier = id;
+}
+
+std::string MbClient::GetIdentifier()
+{
+    return m_identifier;
+}
+
+void MbClient::SendReceiveRequest(RequestType requestId)
+{
     m_transactionCounter++;
 
-    std::array<uint8_t, 12> requestArray = ProcessRequest(requestId, m_slaveAddr, m_transactionCounter);
+    std::array<uint8_t, 12> requestArray = ProcessRequest(requestId, m_deviceType, m_transactionCounter);
 
     if (send(m_socket, requestArray.data(), 12, 0) < 0)
     {

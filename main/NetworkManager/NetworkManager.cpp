@@ -1,4 +1,4 @@
-#include "NetworkManager.h"
+#include "NetworkManager.hpp"
 #include <stdio.h>
 #include <string.h>
 #include <sys/param.h>
@@ -21,8 +21,8 @@ int CONNECTED = 0;
 
 static const char* TAG = "TCP/IP socket";
 
-const char* ssid = "Orange-E1C6";
-const char* pass = "QsZRX7EcEdzKt4XcdN";
+const char* ssid = "TP-Link_43FA";
+const char* pass = "58384442";
 int retryNum=0;
 
 void  NetworkManager::WiFiEventHandler(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
